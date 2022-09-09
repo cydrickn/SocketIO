@@ -32,6 +32,10 @@ $server = new \Cydrickn\SocketIO\Server([
     ]
 ]);
 
+$server->on('Started', function (\Cydrickn\SocketIO\Server $server) {
+    echo 'Websocket is now listening in ' . $server->getHost() . ':' . $server->getPort() . PHP_EOL;
+});
+
 $server->on('connection', function (\Cydrickn\SocketIO\Socket $socket) {
     // ...
 });
@@ -117,9 +121,9 @@ This event can't be use for the route
 Since this event are Swoole Websocket Event
 All Event with * should not be used
 
-- Start - When server starts
-- WorkerStart - When worker starts
 - Request - When you use it for http
+- *WorkerStart - You must not replace this event since this is the worker start logic for this package
+- *Start - You must not replace this event since this is the start logic for this package
 - *Open - You must not replace this event since this is the connection logic for this package
 - *Message - You must not replace this event since this is the message logic for this package
 - *Close - You must not replace this event since this is the message logic for this package
@@ -146,6 +150,12 @@ Emit to multiple room
 $socket->to('room1')->to('room2')->emit('hi', ['name' => 'Juan']);
 ```
 
+Leaving the room
+
+```php
+$socket->leave('room1');
+```
+
 Sending to specific user
 
 In socket.io javascript, the user was automatically created a new room for each client sid.
@@ -168,7 +178,7 @@ $socket->on('private message', (\Cydrickn\SocketIO\Socket $socket, $anotherSocke
 
 ## TODO
 
-- [ ] Leaving room
+- [X] Leaving room
 - [ ] Fix disconnection event
 - [ ] Add route middleware
 - [ ] [Emit Acknowledgement](https://socket.io/docs/v4/emitting-events/#acknowledgements)

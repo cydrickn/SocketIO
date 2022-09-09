@@ -14,16 +14,14 @@ class Rooms implements RoomsInterface
 {
     private SwooleTable $table;
     private Channel $roomsChannel;
-    private Process $process;
 
     public function __construct(private Server $server)
     {
         $this->table = new SwooleTable(2048);
-        $this->table->column('fds', SwooleTable::TYPE_STRING);
+        $this->table->column('fds', SwooleTable::TYPE_STRING, 2048 * 10);
         $this->table->create();
 
         $this->roomsChannel = new Channel(10);
-        $this->dispatch();
     }
 
     public function add(string $roomName): void
@@ -36,28 +34,18 @@ class Rooms implements RoomsInterface
         $this->table->del($roomName);
     }
 
-    public function dispatch()
+    public function start(): void
     {
-        $this->process = new Process(function () {
-            Coroutine\run(function() {
-                while (true) {
-                    if ($this->roomsChannel->isEmpty()) {
-                        continue;
-                    }
-                    $data = $this->roomsChannel->pop();
-                    Coroutine::create(function ($data) {
-                        list($type, $roomName, $fd) = $data;
-                        if ($type === 'join') {
-                            $this->executeJoin($roomName, $fd);
-                        } elseif ($type === 'leave') {
-                            $this->executeLeave($roomName, $fd);
-                        }
-                    }, $data);
-                }
-            });
-        });
-
-        $this->server->addProcess($this->process);
+        $data = $this->roomsChannel->pop();
+        Coroutine::create(function ($data) {
+            list($type, $roomName, $fd) = $data;
+            if ($type === 'join') {
+                $this->executeJoin($roomName, $fd);
+            } elseif ($type === 'leave') {
+                $this->executeLeave($roomName, $fd);
+            }
+        }, $data);
+        $this->start();
     }
 
     public function join(string $roomName, int $fd): void
@@ -67,7 +55,9 @@ class Rooms implements RoomsInterface
 
     public function leave(string $roomName, int $fd): void
     {
-        $this->roomsChannel->push(['leave', $roomName, $fd]);
+        Coroutine::create(function ($roomName, $fd) {
+            $this->roomsChannel->push(['leave', $roomName, $fd], 1);
+        }, $roomName, $fd);
     }
 
     private function executeJoin(string $roomName, int $fd): void
@@ -107,5 +97,24 @@ class Rooms implements RoomsInterface
         }
 
         return json_decode($data, true);
+    }
+
+    public function getFdRooms(int $fd): array
+    {
+        $rooms = [];
+        foreach ($this->table as $key => $row) {
+            $fds = json_decode($row['fds'], true);
+            if (in_array($fd, $fds)) {
+                $rooms[] = $key;
+            }
+        }
+
+        return $rooms;
+    }
+
+    public function count(): int
+    {
+
+        return $this->table->count();
     }
 }

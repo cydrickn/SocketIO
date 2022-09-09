@@ -8,6 +8,7 @@ use Cydrickn\SocketIO\Message\ResponseFactory;
 use Cydrickn\SocketIO\Router\Router;
 use Cydrickn\SocketIO\Storage\RoomsInterface;
 use Swoole\Coroutine;
+use Swoole\Server\Port;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server as WebsocketServer;
 
@@ -180,6 +181,11 @@ class Socket
         return $this->responseFactory->create($this)->to($fd, $type);
     }
 
+    public function in(int|string $fd, int $type = Response::TO_TYPE_ROOM): Response
+    {
+        return $this->to($fd, $type);
+    }
+
     public function emit(string $eventName, ...$args): void
     {
         $response = $this->responseFactory->create($this);
@@ -212,6 +218,11 @@ class Socket
         }
 
         $this->rooms->join($roomName, $this->fd);
+    }
+
+    public function leave(string $roomName): void
+    {
+        $this->rooms->leave($roomName, $this->fd);
     }
 
     public function getServer(): WebsocketServer

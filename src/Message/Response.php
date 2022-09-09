@@ -18,6 +18,8 @@ class Response
 
     private array $receivers = [];
 
+    private bool $dontSend = false;
+
     private array $excludes = [];
 
     private Frame|string $data = '';
@@ -76,6 +78,9 @@ class Response
     public function to(int|string $fd, int $type = Response::TO_TYPE_ROOM): self
     {
         $this->receivers = array_merge($this->receivers, $this->fdFetcher->find($fd, $type));
+        if (empty($this->receivers)) {
+            $this->dontSend = true;
+        }
 
         return $this;
     }
@@ -91,6 +96,10 @@ class Response
     {
         if ($this->sent) {
             throw new \Exception('This message already sent.');
+        }
+
+        if ($this->dontSend) {
+            return 0;
         }
 
         $data = $this->type->value;

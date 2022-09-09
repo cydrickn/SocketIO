@@ -16,7 +16,7 @@ class SocketManager
     public function __construct()
     {
         $this->socketTable = new Table(1024);
-        $this->socketTable->column('fd', Table::TYPE_STRING);
+        $this->socketTable->column('fd', Table::TYPE_INT);
         $this->socketTable->column('connected', Table::TYPE_INT);
         $this->socketTable->create();
 

@@ -50,17 +50,21 @@ class Server extends Socket
         $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
 
         parent::__construct($server, $router, $rooms, $responseFactory);
-
-        $this->setEvent();
-    }
-
-    public function setServer(WebsocketServer $server, bool $setInitialized = true): void
-    {
-        $this->server = $server;
     }
 
     public function setEvent(): void
     {
+        $this->server->on('Start', function () {
+            $message = new MessageRequest($this, 'Started', self::SYSTEM_FD, []);
+            $this->router->dispatch($message);
+        });
+
+        $this->server->on('WorkerStart', function () {
+            $this->rooms->start();
+            $message = new MessageRequest($this, 'WorkerStarted', self::SYSTEM_FD, []);
+            $this->router->dispatch($message);
+        });
+
         $this->server->on('Open', function (WebsocketServer $server, Request $request) {
             $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
             $socket->setFd($request->fd);
@@ -106,6 +110,10 @@ class Server extends Socket
 
             $this->pingTimerManager->remove($fd);
             $this->socketManager->del($fd);
+            $rooms = $this->rooms->getFdRooms($fd);
+            foreach ($rooms as $room) {
+                $this->rooms->leave($room, $fd);
+            }
 
             $disconnect = new MessageRequest($socket, 'disconnect', $fd, []);
             $this->router->dispatch($disconnect);
@@ -115,6 +123,7 @@ class Server extends Socket
 
     public function start(): void
     {
+        $this->setEvent();
         $this->server->start();
     }
 
