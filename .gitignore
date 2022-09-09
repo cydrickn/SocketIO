@@ -1,0 +1,6 @@
+/vendor/
+/.idea/
+/.docker/
+/composer.lock
+/docker-compose.yml
+/Dockerfile

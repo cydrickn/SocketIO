@@ -1,0 +1,23 @@
+{
+    "name": "cydrickn/socketio",
+    "description": "Websocket Server that uses Swoole",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Cydrickn\\SocketIO\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Cydrick Nonog",
+            "email": "cydrick.dev@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "openswoole/ide-helper": "^4.11"
+    }
+}
