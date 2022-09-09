@@ -1,6 +1,6 @@
 {
     "name": "cydrickn/socketio",
-    "description": "Websocket Server that uses Swoole",
+    "description": "PHP Websocket Server that is compatible with socket.io",
     "type": "library",
     "license": "MIT",
     "autoload": {
