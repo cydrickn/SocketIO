@@ -28,15 +28,11 @@ $server->on('Start', function () use ($server) {
 });
 
 $server->on('connection', function (\Cydrickn\SocketIO\Socket $socket) {
-    $socket->toAll()->emit('chat message', 'Socket ' . $socket->getFd() . ' has Joined');
+    $socket->broadcast()->emit('chat message', 'Socket ' . $socket->getFd() . ' has Joined');
 });
 
 $server->on('chat message', function (\Cydrickn\SocketIO\Socket $socket, string $message) {
     $socket->toAll()->emit('chat message', $message);
-});
-
-$server->on('disconnect', function (\Cydrickn\SocketIO\Socket $socket) {
-//    $socket->broadcast()->emit('chat message', $socket->getFd() . ' have been disconnected');
 });
 
 $server->start();
