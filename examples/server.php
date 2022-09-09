@@ -1,5 +1,7 @@
 <?php
 
+use Cydrickn\SocketIO\Storage\Adapter\Rooms;
+
 require __DIR__ . '/../vendor/autoload.php';
 
 $server = new \Cydrickn\SocketIO\Server([
@@ -28,11 +30,12 @@ $server->on('Start', function () use ($server) {
 });
 
 $server->on('connection', function (\Cydrickn\SocketIO\Socket $socket) {
-    $socket->broadcast()->emit('chat message', 'Socket ' . $socket->getFd() . ' has Joined');
+    $socket->join('test');
+    $socket->to('test')->emit('chat message', 'Socket ' . $socket->getFd() . ' has Joined');
 });
 
 $server->on('chat message', function (\Cydrickn\SocketIO\Socket $socket, string $message) {
-    $socket->toAll()->emit('chat message', $message);
+    $socket->to('test')->emit('chat message', $message);
 });
 
 $server->start();

@@ -7,8 +7,13 @@ use Cydrickn\SocketIO\Enum\Type;
 use Cydrickn\SocketIO\Manager\PingTimerManager;
 use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Message\Request as MessageRequest;
+use Cydrickn\SocketIO\Message\ResponseFactory;
+use Cydrickn\SocketIO\Message\ResponseFactoryInterface;
 use Cydrickn\SocketIO\Router\Router;
 use Cydrickn\SocketIO\Router\RouterProvider;
+use Cydrickn\SocketIO\Service\FdFetcher;
+use Cydrickn\SocketIO\Storage\Adapter\Rooms;
+use Cydrickn\SocketIO\Storage\RoomsInterface;
 use Swoole\Http\Request;
 use Swoole\Timer;
 use Swoole\WebSocket\Frame;
@@ -23,6 +28,7 @@ class Server extends Socket
         'sock_type' => 1, // SWOOLE_SOCK_TCP
         'settings' => [],
     ];
+
     protected array $config;
 
     protected array $sockets = [];
@@ -31,14 +37,19 @@ class Server extends Socket
 
     protected PingTimerManager $pingTimerManager;
 
-    public function __construct(array $config = [])
+    public function __construct(array $config, ?Router $router = null, ?RoomsInterface $rooms = null, ?ResponseFactoryInterface $responseFactory = null)
     {
         $this->config = array_replace_recursive(self::DEFAULT_OPTIONS, $config);
-
-        parent::__construct(new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS), new Router());
-        $this->server->set($this->config['settings']);
         $this->socketManager = new SocketManager();
         $this->pingTimerManager = new PingTimerManager();
+
+        $server = new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS);
+        $server->set($this->config['settings']);
+        $router = $router ?? new Router();
+        $rooms = $rooms ?? new Rooms($server);
+        $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
+
+        parent::__construct($server, $router, $rooms, $responseFactory);
 
         $this->setEvent();
     }
@@ -51,7 +62,7 @@ class Server extends Socket
     public function setEvent(): void
     {
         $this->server->on('Open', function (WebsocketServer $server, Request $request) {
-            $socket = new Socket($this->server, $this->router);
+            $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
             $socket->setFd($request->fd);
             $this->socketManager->add($socket);
 
@@ -87,7 +98,7 @@ class Server extends Socket
         $this->server->on('Close', function (WebsocketServer $server, int $fd) {
             $socket = $this->socketManager->get($fd);
             if ($socket === null) {
-                $socket = new Socket($this->server, $this->router);
+                $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
                 $socket->setFd($fd);
             }
             $disconnecting = new MessageRequest($socket, 'disconnecting', $fd, []);

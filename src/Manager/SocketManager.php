@@ -16,7 +16,7 @@ class SocketManager
     public function __construct()
     {
         $this->socketTable = new Table(1024);
-        $this->socketTable->column('sid', Table::TYPE_STRING, 64);
+        $this->socketTable->column('fd', Table::TYPE_STRING);
         $this->socketTable->column('connected', Table::TYPE_INT);
         $this->socketTable->create();
 
@@ -28,8 +28,8 @@ class SocketManager
     public function add(Socket $socket): self
     {
         $this->generateId($socket);
-        $this->socketTable->set($socket->getFd(), [
-            'sid' => $socket->sid,
+        $this->socketTable->set($socket->sid, [
+            'fd' => $socket->getFd(),
             'connected' => 1,
         ]);
         $this->sockets[$socket->getFd()] = $socket;
@@ -57,7 +57,7 @@ class SocketManager
     private function generateId(Socket $socket): string
     {
         $info = $socket->getInfo();
-        $workerId = $info['worker_id'];
+        $workerId = $info['worker_id'] ?? 0;
         $socketFd = $info['socket_fd'];
         $remoteIps = explode('.', $info['remote_ip']);
         $serverFd = $info['server_fd'];
@@ -80,8 +80,12 @@ class SocketManager
         return $id;
     }
 
-    private function getChar(int $index): string
+    private function getChar(int|null $index): string
     {
+        if ($index === null) {
+            $index = 0;
+        }
+
         if ($index >= $this->charactersLen) {
             $index = $this->charactersLen - 1;
         }
@@ -101,5 +105,15 @@ class SocketManager
         }
 
         return $str;
+    }
+
+    public function getFdBySid(string $sid): int|null
+    {
+        $fd = $this->socketTable->get($sid, 'fd');
+        if ($fd === false) {
+            return null;
+        }
+
+        return (int) $fd;
     }
 }

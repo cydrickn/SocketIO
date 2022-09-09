@@ -4,11 +4,16 @@ namespace Cydrickn\SocketIO\Message;
 
 use Cydrickn\SocketIO\Enum\MessageType;
 use Cydrickn\SocketIO\Enum\Type;
+use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Socket;
 use Swoole\WebSocket\Frame;
 
 class Response
 {
+    public const TO_TYPE_FD = 1;
+    public const TO_TYPE_SID = 2;
+    public const TO_TYPE_ROOM = 3;
+
     private int $fd = Socket::SYSTEM_FD;
 
     private array $receivers = [];
@@ -31,16 +36,19 @@ class Response
 
     private Socket $socket;
 
-    public static function new(Socket $socket, int $fd = Socket::SYSTEM_FD): static
+    private FdFetcher $fdFetcher;
+
+    public static function new(Socket $socket, FdFetcher $fdFetcher, int $fd = Socket::SYSTEM_FD): static
     {
         $response = new static($socket);
         $response->fd = $fd;
         $response->sender = $fd;
+        $response->fdFetcher = $fdFetcher;
 
         return $response;
     }
 
-    public function __construct(Socket $socket)
+    private function __construct(Socket $socket)
     {
         $this->socket = $socket;
     }
@@ -65,16 +73,16 @@ class Response
         $this->sender = Socket::NO_SENDER;
     }
 
-    public function to(int $fd): self
+    public function to(int|string $fd, int $type = Response::TO_TYPE_ROOM): self
     {
-        $this->receivers[] = $fd;
+        $this->receivers = array_merge($this->receivers, $this->fdFetcher->find($fd, $type));
 
         return $this;
     }
 
-    public function except(int $fd): self
+    public function except(int|string $fd, int $type = Response::TO_TYPE_ROOM): self
     {
-        $this->excludes[] = $fd;
+        $this->excludes = array_merge($this->excludes, $this->fdFetcher->find($fd, $type));
 
         return $this;
     }

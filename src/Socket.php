@@ -4,8 +4,10 @@ namespace Cydrickn\SocketIO;
 
 use Cydrickn\SocketIO\Enum\Type;
 use Cydrickn\SocketIO\Message\Response;
+use Cydrickn\SocketIO\Message\ResponseFactory;
 use Cydrickn\SocketIO\Router\Router;
-use Swoole\Timer;
+use Cydrickn\SocketIO\Storage\RoomsInterface;
+use Swoole\Coroutine;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server as WebsocketServer;
 
@@ -35,10 +37,14 @@ class Socket
 
     public int $pingTimeout = 20000;
 
-    public function __construct(WebsocketServer $server, Router $router)
+    protected ResponseFactory $responseFactory;
+
+    public function __construct(WebsocketServer $server, Router $router, RoomsInterface $rooms, ResponseFactory $responseFactory)
     {
         $this->server = $server;
         $this->router = $router;
+        $this->responseFactory = $responseFactory;
+        $this->rooms = $rooms;
     }
 
     public function isEstablished(int $fd): bool
@@ -156,12 +162,12 @@ class Socket
 
     public function newMessage(): Response
     {
-        return Response::new($this, $this->fd);
+        return $this->responseFactory->create($this);
     }
 
     public function toAll(): Response
     {
-        return Response::new($this, $this->getFd());
+        return $this->responseFactory->create($this);
     }
 
     public function ping(): void
@@ -169,16 +175,16 @@ class Socket
         $this->sendTo($this->fd, (string) Type::PING->value);
     }
 
-    public function to(int $fd): Response
+    public function to(int|string $fd, int $type = Response::TO_TYPE_ROOM): Response
     {
-        return Response::new($this, $this->getFd())->to($fd);
+        return $this->responseFactory->create($this)->to($fd, $type);
     }
 
     public function emit(string $eventName, ...$args): void
     {
-        $response = Response::new($this, $this->fd);
-        if ($this->fd === self::SYSTEM_FD) {
-            $response->to($this->fd);
+        $response = $this->responseFactory->create($this);
+        if ($this->fd !== self::SYSTEM_FD) {
+            $response->to($this->fd, Response::TO_TYPE_FD);
         }
 
         $response->emit($eventName, ...$args);
@@ -186,8 +192,10 @@ class Socket
 
     public function broadcast(): Response
     {
-        $response = Response::new($this, $this->fd);
-        $response->except($this->fd);
+        $response = $this->responseFactory->create($this);
+        if ($this->fd !== self::SYSTEM_FD) {
+            $response->except($this->fd, Response::TO_TYPE_FD);
+        }
 
         return $response;
     }
@@ -195,5 +203,19 @@ class Socket
     public function getInfo(): array
     {
         return $this->server->getClientInfo($this->getFd());
+    }
+
+    public function join(string $roomName): void
+    {
+        if ($this->fd === self::SYSTEM_FD) {
+            return;
+        }
+
+        $this->rooms->join($roomName, $this->fd);
+    }
+
+    public function getServer(): WebsocketServer
+    {
+        return $this->server;
     }
 }
