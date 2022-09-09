@@ -30,8 +30,8 @@ $server->on('Start', function () use ($server) {
 });
 
 $server->on('connection', function (\Cydrickn\SocketIO\Socket $socket) {
-    $socket->join('test');
-    $socket->to('test')->emit('chat message', 'Socket ' . $socket->getFd() . ' has Joined');
+    $socket->broadcast()->emit('chat message', 'Client ' . $socket->sid . ' has Joined');
+    $socket->emit('chat message', 'Welcome to Socket IO Websocket');
 });
 
 $server->on('chat message', function (\Cydrickn\SocketIO\Socket $socket, string $message) {
