@@ -16,9 +16,6 @@ use Cydrickn\SocketIO\Router\RouterProvider;
 use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Session\SessionsTable;
 use Cydrickn\SocketIO\Session\SessionStorageInterface;
-use Imefisto\PsrSwoole\ServerRequest;
-use Nyholm\Psr7\Factory\Psr17Factory;
-use Psr\Http\Message\RequestInterface;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Swoole\Table;
@@ -48,8 +45,6 @@ class Server extends Socket
     protected array $middlewares = [];
     protected array $handShakeMiddleware = [];
 
-    protected Psr17Factory $requestFactory;
-
     public function __construct(
         array $config,
         ?Router $router = null,
@@ -67,7 +62,6 @@ class Server extends Socket
         $router = $router ?? new Router();
         $rooms = $rooms ?? new RoomsTable();
         $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
-        $this->requestFactory = new Psr17Factory();
 
         parent::__construct($server, $router, $rooms, $responseFactory);
     }
@@ -121,8 +115,7 @@ class Server extends Socket
 
             $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
             $socket->setFd($request->fd);
-            $psrRequest = new ServerRequest($request, $this->requestFactory, $this->requestFactory, $this->requestFactory);
-            $socket->setRequest($psrRequest);
+            $socket->setRequest($request);
 
             $continue = true;
             foreach ($this->handShakeMiddleware as $middleware) {

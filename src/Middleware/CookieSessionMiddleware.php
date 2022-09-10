@@ -16,7 +16,7 @@ class CookieSessionMiddleware
     public function handle(Socket $socket, Response $response, callable $next)
     {
         $request = $socket->getRequest();
-        $sessionId = $request->getCookieParams()[$this->cookieName] ?? IdGenerator::generateFromSocket($socket, [['rand', 4]]);
+        $sessionId = $request->cookie[$this->cookieName] ?? IdGenerator::generateFromSocket($socket, [['rand', 4]]);
 
         $session = $this->server->getSessionStorage()->getSession($sessionId);
         $session->commit();

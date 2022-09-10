@@ -3,14 +3,13 @@
 namespace Cydrickn\SocketIO;
 
 use Cydrickn\SocketIO\Enum\Type;
-use Cydrickn\SocketIO\Message\Request;
 use Cydrickn\SocketIO\Message\Response;
 use Cydrickn\SocketIO\Message\ResponseFactory;
 use Cydrickn\SocketIO\Router\Router;
 use Cydrickn\SocketIO\Room\RoomsInterface;
 use Cydrickn\SocketIO\Session\Session;
-use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Swoole\Http\Request;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server as WebsocketServer;
 
@@ -42,7 +41,7 @@ class Socket
 
     protected ResponseFactory $responseFactory;
 
-    protected ?ServerRequestInterface $request = null;
+    protected ?Request $request = null;
 
     private array $attributes = [];
 
@@ -246,12 +245,12 @@ class Socket
         return $this->server;
     }
 
-    public function setRequest(ServerRequestInterface $request): void
+    public function setRequest(Request $request): void
     {
         $this->request = $request;
     }
 
-    public function getRequest(): ?ServerRequestInterface
+    public function getRequest(): ?Request
     {
         return  $this->request;
     }
