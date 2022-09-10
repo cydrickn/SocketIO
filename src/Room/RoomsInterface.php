@@ -1,6 +1,6 @@
 <?php
 
-namespace Cydrickn\SocketIO\Storage;
+namespace Cydrickn\SocketIO\Room;
 
 interface RoomsInterface
 {

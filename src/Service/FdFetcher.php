@@ -2,15 +2,14 @@
 
 namespace Cydrickn\SocketIO\Service;
 
-use Cydrickn\SocketIO\Enum\Type;
 use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Message\Response;
+use Cydrickn\SocketIO\Room\RoomsInterface;
 use Cydrickn\SocketIO\Server;
-use Cydrickn\SocketIO\Storage\Adapter\Rooms;
 
 class FdFetcher
 {
-    public function __construct(private Server $server, private Rooms $rooms, private SocketManager $socketManager)
+    public function __construct(private Server $server, private RoomsInterface $rooms, private SocketManager $socketManager)
     {
 
     }

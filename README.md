@@ -172,6 +172,93 @@ $socket->on('private message', (\Cydrickn\SocketIO\Socket $socket, $anotherSocke
 });
 ```
 
+## Middleware
+
+You can add an middleware for the server
+
+```php
+$server->on(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
+    // ...
+    $next();
+});
+```
+
+To not continue the connection you just pass \Error in the $next
+```php
+$server->on(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
+    // ...
+    $next(new \Error('Something went wrong'));
+});
+```
+
+You can also add middleware for handshake event of Swoole Server.
+Just passed true to the second argument.
+
+Also in callback it will pass the response for you to modify if you need it
+```php
+$server->on(function (\Cydrickn\SocketIO\Socket $socket, \Swoole\Http\Response $response, callable $next) {
+    // ...
+}, true);
+```
+
+Example of middleware that use in handshake is the [Cydrickn\SocketIO\Middleware\CookieSessionMiddleware](/src/Middleware/CookieSessionMiddleware.php).
+This middleware will create a session that uses the cookie and if the client did not send the session cookie then it will
+create a cookie and response it from the handshake.
+
+## Session
+
+In this package the there is already session storage that you can use,
+
+- **SessionsTable** - Uses the Swoole\Table as the storage
+- **SessionsNative** - Uses the file storage
+
+Using Swoole, session_start, $_SESSION should not be use since this function are global it stores the data
+in the process itself.
+
+The session that provided here does not use this predefined session extensions.
+Currently, the session is define per connection so you can take the session via.
+
+```php
+$socket->getSession();
+```
+
+This getSession can return null if you don't have any middleware that creating the session.
+
+To set a session
+```php
+$session = $server->getSessionStorage()->get('123456'); // This will automatically created once it does not exists
+$socket->setSession($session);
+```
+
+You can also customize your session storage, just implement the
+[Cydrickn\SocketIO\Session\SessionStorageInterface](src/Session/SessionStorageInterface.php)
+
+```php
+<?php
+
+class CustomeStorage implements SessionStorageInterface {
+    // ...
+}
+```
+
+After creating your storage
+
+You need to pass this in your server constructor
+
+```php
+$server = new \Cydrickn\SocketIO\Server([
+    'host' => '0.0.0.0',
+    'port' => 8000,
+    'mode' => SWOOLE_PROCESS,
+    'serve_http' => true,
+    'settings' => [
+        \Swoole\Constant::OPTION_WORKER_NUM => swoole_cpu_num() * 2,
+        \Swoole\Constant::OPTION_ENABLE_STATIC_HANDLER => true,
+        \Swoole\Constant::OPTION_DOCUMENT_ROOT => dirname(__DIR__).'/examples'
+    ]
+], sessionStorage: new CustomeStorage());
+```
+
 ## Example
 
 - [Chat Example](https://github.com/cydrickn/SocketIO/tree/main/examples)
@@ -179,8 +266,7 @@ $socket->on('private message', (\Cydrickn\SocketIO\Socket $socket, $anotherSocke
 ## TODO
 
 - [X] Leaving room
-- [ ] Fix disconnection event
-- [ ] Add route middleware
+- [X] Fix disconnection event
 - [ ] [Emit Acknowledgement](https://socket.io/docs/v4/emitting-events/#acknowledgements)
 - [ ] [Implement with timeout emit](https://socket.io/docs/v4/emitting-events/#with-timeout)
 - [ ] [Implement Catch all listeners](https://socket.io/docs/v4/listening-to-events/#catch-all-listeners)

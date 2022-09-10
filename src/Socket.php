@@ -3,12 +3,14 @@
 namespace Cydrickn\SocketIO;
 
 use Cydrickn\SocketIO\Enum\Type;
+use Cydrickn\SocketIO\Message\Request;
 use Cydrickn\SocketIO\Message\Response;
 use Cydrickn\SocketIO\Message\ResponseFactory;
 use Cydrickn\SocketIO\Router\Router;
-use Cydrickn\SocketIO\Storage\RoomsInterface;
-use Swoole\Coroutine;
-use Swoole\Server\Port;
+use Cydrickn\SocketIO\Room\RoomsInterface;
+use Cydrickn\SocketIO\Session\Session;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server as WebsocketServer;
 
@@ -39,6 +41,20 @@ class Socket
     public int $pingTimeout = 20000;
 
     protected ResponseFactory $responseFactory;
+
+    protected ?ServerRequestInterface $request = null;
+
+    private array $attributes = [];
+
+    public function __get(string $name)
+    {
+        return $this->attributes[$name] ?? null;
+    }
+
+    public function __set(string $name, mixed $data)
+    {
+        $this->attributes[$name] = $data;
+    }
 
     public function __construct(WebsocketServer $server, Router $router, RoomsInterface $rooms, ResponseFactory $responseFactory)
     {
@@ -228,5 +244,25 @@ class Socket
     public function getServer(): WebsocketServer
     {
         return $this->server;
+    }
+
+    public function setRequest(ServerRequestInterface $request): void
+    {
+        $this->request = $request;
+    }
+
+    public function getRequest(): ?ServerRequestInterface
+    {
+        return  $this->request;
+    }
+
+    public function setSession(Session $session): void
+    {
+        $this->session = $session;
+    }
+
+    public function getSession(): ?Session
+    {
+        return $this->session;
     }
 }

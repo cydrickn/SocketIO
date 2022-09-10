@@ -4,3 +4,4 @@
 /composer.lock
 /docker-compose.yml
 /Dockerfile
+/examples/sessions

@@ -1,21 +1,18 @@
 <?php
 
-namespace Cydrickn\SocketIO\Storage\Adapter;
-
-use Cydrickn\SocketIO\Storage\RoomsInterface;
+namespace Cydrickn\SocketIO\Room;
 
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
-use Swoole\Process;
 use Swoole\Table as SwooleTable;
 use Swoole\WebSocket\Server;
 
-class Rooms implements RoomsInterface
+class RoomsTable implements RoomsInterface
 {
     private SwooleTable $table;
     private Channel $roomsChannel;
 
-    public function __construct(private Server $server)
+    public function __construct()
     {
         $this->table = new SwooleTable(2048);
         $this->table->column('fds', SwooleTable::TYPE_STRING, 2048 * 10);
@@ -36,16 +33,17 @@ class Rooms implements RoomsInterface
 
     public function start(): void
     {
-        $data = $this->roomsChannel->pop();
-        Coroutine::create(function ($data) {
-            list($type, $roomName, $fd) = $data;
-            if ($type === 'join') {
-                $this->executeJoin($roomName, $fd);
-            } elseif ($type === 'leave') {
-                $this->executeLeave($roomName, $fd);
+        Coroutine::create(function () {
+            while (true) {
+                $data = $this->roomsChannel->pop();
+                list($type, $roomName, $fd) = $data;
+                if ($type === 'join') {
+                    $this->executeJoin($roomName, $fd);
+                } elseif ($type === 'leave') {
+                    $this->executeLeave($roomName, $fd);
+                }
             }
-        }, $data);
-        $this->start();
+        });
     }
 
     public function join(string $roomName, int $fd): void
