@@ -69,13 +69,14 @@ class Server extends Socket
     public function setEvent(): void
     {
         $this->server->on('Start', function () {
+            $this->sessionStorage->start();
+            $this->rooms->start();
+
             $message = new MessageRequest($this, 'Started', self::SYSTEM_FD, []);
             $this->router->dispatch($message);
         });
 
         $this->server->on('WorkerStart', function () {
-            $this->sessionStorage->start();
-            $this->rooms->start();
             $message = new MessageRequest($this, 'WorkerStarted', self::SYSTEM_FD, []);
             $this->router->dispatch($message);
         });
