@@ -161,6 +161,10 @@ class Server extends Socket
     }
 
     public function onOpen(WebsocketServer $server, Socket $socket) {
+        if (!$server->isEstablished($socket->getFd())) {
+            return;
+        }
+
         $message = json_encode([
             'sid' => $socket->sid,
             'pingInterval' => 25000,
@@ -175,6 +179,10 @@ class Server extends Socket
     public function onMessage(WebsocketServer $server, Frame $frame) {
         $socket = $this->socketManager->get($frame->fd);
         if ($socket === null) {
+            return;
+        }
+
+        if (!$server->isEstablished($socket->getFd())) {
             return;
         }
 

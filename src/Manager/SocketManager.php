@@ -29,6 +29,10 @@ class SocketManager
     public function add(Socket $socket): self
     {
         $id = IdGenerator::generateFromSocket($socket);
+        if (empty($id)) {
+            return $this;
+        }
+
         $socket->sid = $id;
 
         $this->socketTable->set($socket->sid, [

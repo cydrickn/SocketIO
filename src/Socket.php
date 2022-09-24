@@ -221,7 +221,7 @@ class Socket
         return $response;
     }
 
-    public function getInfo(): array
+    public function getInfo(): array|bool
     {
         return $this->server->getClientInfo($this->getFd());
     }

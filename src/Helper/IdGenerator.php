@@ -13,6 +13,10 @@ class IdGenerator
     public static function generateFromSocket(Socket $socket, array $addition = []): string
     {
         $info = $socket->getInfo();
+        if ($info === false) {
+            return '';
+        }
+
         $workerId = $info['worker_id'] ?? 0;
         $socketFd = $info['socket_fd'];
         $remoteIps = explode('.', $info['remote_ip']);
