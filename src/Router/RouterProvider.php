@@ -4,7 +4,7 @@ namespace Cydrickn\SocketIO\Router;
 
 class RouterProvider
 {
-    private array $routes = [];
+    protected array $routes = [];
 
     public function addRoute(Route $route): self
     {
