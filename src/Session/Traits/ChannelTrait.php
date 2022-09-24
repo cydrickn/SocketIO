@@ -27,6 +27,9 @@ trait ChannelTrait
             while (true) {
                 $data = $this->channel->pop(1);
                 list($action, $sessionId, $field, $data) = $data;
+                if ($sessionId === null) {
+                    continue;
+                }
                 $sessionData = $this->get($sessionId);
                 if ($action === 'del') {
                     unset($sessionData[$field]);
