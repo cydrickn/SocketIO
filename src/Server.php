@@ -45,6 +45,8 @@ class Server extends Socket
     protected array $middlewares = [];
     protected array $handShakeMiddleware = [];
 
+    protected array $serverEvents;
+
     public function __construct(
         array $config,
         ?Router $router = null,
@@ -63,65 +65,126 @@ class Server extends Socket
         $rooms = $rooms ?? new RoomsTable();
         $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
 
+        $this->serverEvents = [
+            'Start' => [$this, 'onStart'],
+            'WorkerStart' => [$this, 'onWorkerStart'],
+            'Open' => [$this, 'onOpen'],
+            'Message' => [$this, 'onMessage'],
+            'Close' => [$this, 'onClose'],
+            'handshake' => [$this, 'onHandshake'],
+        ];
+
         parent::__construct($server, $router, $rooms, $responseFactory);
     }
 
-    public function setEvent(): void
+    public function onStart()
     {
-        $this->server->on('Start', function () {
-            $this->sessionStorage->start();
-            $this->rooms->start();
+        $this->sessionStorage->start();
+        $this->rooms->start();
 
-            $message = new MessageRequest($this, 'Started', self::SYSTEM_FD, []);
-            $this->router->dispatch($message);
-        });
+        $message = new MessageRequest($this, 'Started', self::SYSTEM_FD, []);
+        $this->router->dispatch($message);
+    }
 
-        $this->server->on('WorkerStart', function () {
-            $message = new MessageRequest($this, 'WorkerStarted', self::SYSTEM_FD, []);
-            $this->router->dispatch($message);
-        });
+    public function onWorkerStart()
+    {
+        $message = new MessageRequest($this, 'WorkerStarted', self::SYSTEM_FD, []);
+        $this->router->dispatch($message);
+    }
 
-        $this->server->on('handshake', function (Request $request, Response $response)
+    public function onHandshake(Request $request, Response $response)
+    {
+        $secWebSocketKey = $request->header['sec-websocket-key'];
+        $patten = '#^[+/0-9A-Za-z]{21}[AQgw]==$#';
+
+        // At this stage if the socket request does not meet custom requirements, you can ->end() it here and return false...
+
+        // Websocket handshake connection algorithm verification
+        if (0 === preg_match($patten, $secWebSocketKey) || 16 !== strlen(base64_decode($secWebSocketKey)))
         {
-            $secWebSocketKey = $request->header['sec-websocket-key'];
-            $patten = '#^[+/0-9A-Za-z]{21}[AQgw]==$#';
+            $response->end();
+            return false;
+        }
 
-            // At this stage if the socket request does not meet custom requirements, you can ->end() it here and return false...
+        $key = base64_encode(sha1($request->header['sec-websocket-key'] . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
 
-            // Websocket handshake connection algorithm verification
-            if (0 === preg_match($patten, $secWebSocketKey) || 16 !== strlen(base64_decode($secWebSocketKey)))
-            {
-                $response->end();
-                return false;
+        $headers = [
+            'Upgrade' => 'websocket',
+            'Connection' => 'Upgrade',
+            'Sec-WebSocket-Accept' => $key,
+            'Sec-WebSocket-Version' => '13',
+        ];
+
+        if(isset($request->header['sec-websocket-protocol']))
+        {
+            $headers['Sec-WebSocket-Protocol'] = $request->header['sec-websocket-protocol'];
+        }
+
+        foreach($headers as $key => $val)
+        {
+            $response->header($key, $val);
+        }
+
+        $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
+        $socket->setFd($request->fd);
+        $socket->setRequest($request);
+
+        $continue = true;
+        foreach ($this->handShakeMiddleware as $middleware) {
+            call_user_func($middleware, $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
+                if ($error) {
+                    $continue = false;
+                }
+            });
+
+            if (!$continue) {
+                break;
             }
+        }
 
-            $key = base64_encode(sha1($request->header['sec-websocket-key'] . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
+        if (!$continue) {
+            $response->status(400);
+            $response->end();
 
-            $headers = [
-                'Upgrade' => 'websocket',
-                'Connection' => 'Upgrade',
-                'Sec-WebSocket-Accept' => $key,
-                'Sec-WebSocket-Version' => '13',
-            ];
+            return false;
+        }
 
-            if(isset($request->header['sec-websocket-protocol']))
-            {
-                $headers['Sec-WebSocket-Protocol'] = $request->header['sec-websocket-protocol'];
-            }
+        $response->status(101);
+        $response->end();
 
-            foreach($headers as $key => $val)
-            {
-                $response->header($key, $val);
-            }
+        $this->server->defer(function () use ($socket) {
+            $this->socketManager->add($socket);
+            call_user_func($this->server->getCallback('Open'), $this->server, $socket);
+        });
 
-            $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
-            $socket->setFd($request->fd);
-            $socket->setRequest($request);
+        return true;
+    }
 
+    public function onOpen(WebsocketServer $server, Socket $socket) {
+        $message = json_encode([
+            'sid' => $socket->sid,
+            'pingInterval' => 25000,
+            'pingTimeout' => 20000,
+            'upgrades' => [],
+        ]);
+
+        $socket->sendTo($socket->getFd(), Type::OPEN->value . $message);
+        $this->pingTimerManager->createForSocket($socket);
+    }
+
+    public function onMessage(WebsocketServer $server, Frame $frame) {
+        $socket = $this->socketManager->get($frame->fd);
+        if ($socket === null) {
+            return;
+        }
+
+        $message = MessageRequest::fromFrame($frame, $socket);
+        if ($message->getType() === Type::MESSAGE && $message->getMessageType() === MessageType::CONNECT) {
             $continue = true;
-            foreach ($this->handShakeMiddleware as $middleware) {
-                call_user_func($middleware, $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
+            foreach ($this->middlewares as $middleware) {
+                call_user_func($middleware, $socket, function (?\Error $error = null)  use ($socket, &$continue) {
                     if ($error) {
+                        $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::ERROR->value . json_encode(['message' => $error->getMessage()]));
                         $continue = false;
                     }
                 });
@@ -130,90 +193,44 @@ class Server extends Socket
                     break;
                 }
             }
-
-            if (!$continue) {
-                $response->status(400);
-                $response->end();
-
-                return false;
+            if ($continue) {
+                $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::CONNECT->value . json_encode(['sid' => $socket->sid]));
+                $connectionMessage = new MessageRequest($socket, 'connection', $socket->getFd(), []);
+                $this->router->dispatch($connectionMessage);
             }
+        } elseif ($message->getType() === Type::PONG) {
 
-            $response->status(101);
-            $response->end();
+        } else {
+            $this->router->dispatch($message);
+        }
+    }
 
-            $this->server->defer(function () use ($socket) {
-                $this->socketManager->add($socket);
-                call_user_func($this->server->getCallback('Open'), $this->server, $socket);
-            });
+    public function onClose(WebsocketServer $server, int $fd) {
+        $socket = $this->socketManager->get($fd);
+        if ($socket === null) {
+            $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
+            $socket->setFd($fd);
+        }
+        $disconnecting = new MessageRequest($socket, 'disconnecting', $fd, []);
+        $this->router->dispatch($disconnecting);
 
-            return true;
-        });
+        $this->pingTimerManager->remove($fd);
+        $this->socketManager->del($fd);
+        $rooms = $this->rooms->getFdRooms($fd);
+        foreach ($rooms as $room) {
+            $this->rooms->leave($room, $fd);
+        }
 
-        $this->server->on('Open', function (WebsocketServer $server, Socket $socket) {
-            $message = json_encode([
-                'sid' => $socket->sid,
-                'pingInterval' => 25000,
-                'pingTimeout' => 20000,
-                'upgrades' => [],
-            ]);
+        $disconnect = new MessageRequest($socket, 'disconnect', $fd, []);
+        $this->router->dispatch($disconnect);
+        unset($socket);
+    }
 
-            $socket->sendTo($socket->getFd(), Type::OPEN->value . $message);
-            $this->pingTimerManager->createForSocket($socket);
-        });
-
-        $this->server->on('Message', function (WebsocketServer $server, Frame $frame) {
-            $socket = $this->socketManager->get($frame->fd);
-            if ($socket === null) {
-                return;
-            }
-
-            $message = MessageRequest::fromFrame($frame, $socket);
-            if ($message->getType() === Type::MESSAGE && $message->getMessageType() === MessageType::CONNECT) {
-                $continue = true;
-                foreach ($this->middlewares as $middleware) {
-                    call_user_func($middleware, $socket, function (?\Error $error = null)  use ($socket, &$continue) {
-                        if ($error) {
-                            $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::ERROR->value . json_encode(['message' => $error->getMessage()]));
-                            $continue = false;
-                        }
-                    });
-
-                    if (!$continue) {
-                        break;
-                    }
-                }
-                if ($continue) {
-                    $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::CONNECT->value . json_encode(['sid' => $socket->sid]));
-                    $connectionMessage = new MessageRequest($socket, 'connection', $socket->getFd(), []);
-                    $this->router->dispatch($connectionMessage);
-                }
-            } elseif ($message->getType() === Type::PONG) {
-
-            } else {
-                $this->router->dispatch($message);
-            }
-        });
-
-        $this->server->on('Close', function (WebsocketServer $server, int $fd) {
-            $socket = $this->socketManager->get($fd);
-            if ($socket === null) {
-                $socket = new Socket($this->server, $this->router, $this->rooms, $this->responseFactory);
-                $socket->setFd($fd);
-            }
-            $disconnecting = new MessageRequest($socket, 'disconnecting', $fd, []);
-            $this->router->dispatch($disconnecting);
-
-            $this->pingTimerManager->remove($fd);
-            $this->socketManager->del($fd);
-            $rooms = $this->rooms->getFdRooms($fd);
-            foreach ($rooms as $room) {
-                $this->rooms->leave($room, $fd);
-            }
-
-            $disconnect = new MessageRequest($socket, 'disconnect', $fd, []);
-            $this->router->dispatch($disconnect);
-            unset($socket);
-        });
+    public function setEvent(): void
+    {
+        foreach ($this->serverEvents as $serverEvent => $function) {
+            $this->server->on($serverEvent, $function);
+        }
     }
 
     public function start(): void
@@ -267,5 +284,15 @@ class Server extends Socket
     public function getSessionStorage(): SessionStorageInterface
     {
         return $this->sessionStorage;
+    }
+
+    public function removeSystemEvents(string $name): void
+    {
+        unset($this->serverEvents, $name);
+    }
+
+    public function setSystemEvents(string $name, callable $callable): void
+    {
+        $this->serverEvents[$name] = $callable;
     }
 }
