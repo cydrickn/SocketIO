@@ -3,6 +3,7 @@
 namespace Cydrickn\SocketIO\Session;
 
 use Cydrickn\SocketIO\Session\Traits\ChannelTrait;
+use Swoole\Coroutine\Channel;
 
 class SessionsNative implements SessionStorageInterface
 {
@@ -13,6 +14,8 @@ class SessionsNative implements SessionStorageInterface
         if (!file_exists($this->pathStorage)) {
             mkdir($this->pathStorage);
         }
+
+        $this->channel = new Channel(10);
     }
 
     public function get(string $sessionId): array|null

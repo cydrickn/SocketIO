@@ -6,6 +6,8 @@ interface SessionStorageInterface
 {
     public function start(): void;
 
+    public function stop(): void;
+
     public function get(string $sessionId): array|null;
 
     public function getField(string $sessionId, string $field, mixed $default): mixed;

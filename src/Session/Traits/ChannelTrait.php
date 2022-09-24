@@ -15,12 +15,17 @@ trait ChannelTrait
         $this->channel = new Channel($capacity);
     }
 
+    public function stop(): void
+    {
+        $this->channel->close();
+    }
+
     public function start(): void
     {
         $this->setChannel(10);
         Coroutine::create(function () {
             while (true) {
-                $data = $this->channel->pop();
+                $data = $this->channel->pop(1);
                 list($action, $sessionId, $field, $data) = $data;
                 $sessionData = $this->get($sessionId);
                 if ($action === 'del') {

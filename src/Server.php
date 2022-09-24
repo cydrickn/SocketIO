@@ -72,6 +72,7 @@ class Server extends Socket
             'Message' => [$this, 'onMessage'],
             'Close' => [$this, 'onClose'],
             'handshake' => [$this, 'onHandshake'],
+            'BeforeReload' => [$this, 'onBeforeReload'],
         ];
 
         parent::__construct($server, $router, $rooms, $responseFactory);
@@ -79,17 +80,23 @@ class Server extends Socket
 
     public function onStart()
     {
-        $this->sessionStorage->start();
-        $this->rooms->start();
-
         $message = new MessageRequest($this, 'Started', self::SYSTEM_FD, []);
         $this->router->dispatch($message);
     }
 
     public function onWorkerStart()
     {
+        $this->sessionStorage->start();
+        $this->rooms->start();
+
         $message = new MessageRequest($this, 'WorkerStarted', self::SYSTEM_FD, []);
         $this->router->dispatch($message);
+    }
+
+    public function onBeforeReload()
+    {
+        $this->sessionStorage->stop();
+        $this->rooms->stop();
     }
 
     public function onHandshake(Request $request, Response $response)

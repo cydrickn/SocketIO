@@ -18,5 +18,7 @@ interface RoomsInterface
 
     public function start(): void;
 
+    public function stop(): void;
+
     public function count(): int;
 }

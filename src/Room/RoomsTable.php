@@ -31,11 +31,16 @@ class RoomsTable implements RoomsInterface
         $this->table->del($roomName);
     }
 
+    public function stop(): void
+    {
+        $this->roomsChannel->close();
+    }
+
     public function start(): void
     {
         Coroutine::create(function () {
             while (true) {
-                $data = $this->roomsChannel->pop();
+                $data = $this->roomsChannel->pop(1);
                 list($type, $roomName, $fd) = $data;
                 if ($type === 'join') {
                     $this->executeJoin($roomName, $fd);
