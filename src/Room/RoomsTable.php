@@ -11,14 +11,13 @@ class RoomsTable implements RoomsInterface
 {
     private SwooleTable $table;
     private Channel $roomsChannel;
+    private bool $stopped = false;
 
     public function __construct()
     {
         $this->table = new SwooleTable(2048);
         $this->table->column('fds', SwooleTable::TYPE_STRING, 2048 * 10);
         $this->table->create();
-
-        $this->roomsChannel = new Channel(10);
     }
 
     public function add(string $roomName): void
@@ -33,13 +32,16 @@ class RoomsTable implements RoomsInterface
 
     public function stop(): void
     {
-        $this->roomsChannel->close();
+        $this->stopped = true;
     }
 
     public function start(): void
     {
+        $this->stopped = false;
+        $this->roomsChannel = new Channel(10);
         Coroutine::create(function () {
-            while (true) {
+            $cid = Coroutine::getuid();
+            while (!$this->stopped) {
                 $data = $this->roomsChannel->pop(1);
                 list($type, $roomName, $fd) = $data;
                 if ($type === 'join') {
@@ -48,6 +50,8 @@ class RoomsTable implements RoomsInterface
                     $this->executeLeave($roomName, $fd);
                 }
             }
+            $this->roomsChannel->close();
+            Coroutine::cancel($cid);
         });
     }
 

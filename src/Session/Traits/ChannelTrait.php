@@ -9,6 +9,8 @@ use Swoole\Coroutine\Channel;
 trait ChannelTrait
 {
     private Channel $channel;
+    private int $cid;
+    private bool $stopped = false;
 
     public function setChannel(int $capacity)
     {
@@ -17,14 +19,17 @@ trait ChannelTrait
 
     public function stop(): void
     {
-        $this->channel->close();
+        $this->stopped = true;
     }
 
     public function start(): void
     {
+        $this->stopped = false;
         $this->setChannel(10);
+
         Coroutine::create(function () {
-            while (true) {
+            $cid = Coroutine::getuid();
+            while (!$this->stopped) {
                 $data = $this->channel->pop(1);
                 list($action, $sessionId, $field, $data) = $data;
                 if ($sessionId === null) {
@@ -40,6 +45,8 @@ trait ChannelTrait
                 }
                 $this->setData($sessionId, $sessionData);
             }
+            $this->channel->close();
+            Coroutine::cancel($cid);
         });
     }
 

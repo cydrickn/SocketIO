@@ -73,6 +73,7 @@ class Server extends Socket
             'Close' => [$this, 'onClose'],
             'handshake' => [$this, 'onHandshake'],
             'BeforeReload' => [$this, 'onBeforeReload'],
+            'WorkerExit' => [$this, 'onWorkerExit'],
         ];
 
         parent::__construct($server, $router, $rooms, $responseFactory);
@@ -93,10 +94,17 @@ class Server extends Socket
         $this->router->dispatch($message);
     }
 
-    public function onBeforeReload()
+    public function onWorkerExit()
     {
         $this->sessionStorage->stop();
         $this->rooms->stop();
+
+        \Swoole\Timer::clearAll();
+    }
+
+    public function onBeforeReload()
+    {
+        // Do nothing
     }
 
     public function onHandshake(Request $request, Response $response)
