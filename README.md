@@ -267,7 +267,7 @@ $server = new \Cydrickn\SocketIO\Server([
 
 - [X] Leaving room
 - [X] Fix disconnection event
-- [ ] [Emit Acknowledgement](https://socket.io/docs/v4/emitting-events/#acknowledgements)
+- [X] [Emit Acknowledgement](https://socket.io/docs/v4/emitting-events/#acknowledgements)
 - [ ] [Implement with timeout emit](https://socket.io/docs/v4/emitting-events/#with-timeout)
 - [ ] [Implement Catch all listeners](https://socket.io/docs/v4/listening-to-events/#catch-all-listeners)
 - [ ] [Implement once, off, removeAllListeners](https://socket.io/docs/v4/listening-to-events/#eventemitter-methods)

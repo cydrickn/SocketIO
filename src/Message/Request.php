@@ -17,6 +17,7 @@ class Request
     protected array $data;
     protected Type $type = Type::NONE;
     protected MessageType $messageType = MessageType::EVENT;
+    protected int $callbackNum = -1;
 
     public static function fromFrame(Frame $frame, Socket $socket): Request
     {
@@ -29,6 +30,7 @@ class Request
         $messageType = MessageType::EVENT;
         $packetData = json_decode($packet, true);
         $path = $namespace ? $namespace . '/' : '';
+        $callbackNum = -1;
 
         if ($code[0] !== null) {
             $type = Type::from((int) $code[0]);
@@ -36,6 +38,9 @@ class Request
 
         if ($code[1] !== null && $type === Type::MESSAGE) {
             $messageType = MessageType::from($code[1]);
+            if (count($code) >= 3) {
+                $callbackNum = (int) implode('', array_slice($code, 2));
+            }
         }
 
         $data = [];
@@ -61,19 +66,20 @@ class Request
                 break;
         }
 
-        $request = new static($socket, $path, $frame->fd, $data);
+        $request = new static($socket, $path, $frame->fd, $data, $callbackNum);
         $request->setType($type);
         $request->setMessageType($messageType);
 
         return $request;
     }
 
-    public function __construct(Socket $socket, string $path, int $fd, array $data)
+    public function __construct(Socket $socket, string $path, int $fd, array $data, int $callbackNum = -1)
     {
         $this->path = $path;
         $this->fd = $fd;
         $this->socket = $socket;
         $this->data = $data;
+        $this->callbackNum = $callbackNum;
     }
 
     public function getType(): Type
@@ -103,7 +109,14 @@ class Request
 
     public function getData(): array
     {
-        return $this->data;
+        $data = $this->data;
+        if ($this->hasCallback()) {
+            $data[] = function (...$args) {
+                $this->socket->ack($this->getCallbackNum(), ...$args);
+            };
+        }
+
+        return $data;
     }
 
     public function setType(Type $type): void
@@ -114,5 +127,15 @@ class Request
     public function setMessageType(MessageType $messageType): void
     {
         $this->messageType = $messageType;
+    }
+
+    public function hasCallback(): bool
+    {
+        return $this->callbackNum >= 0;
+    }
+
+    public function getCallbackNum(): int
+    {
+        return $this->callbackNum;
     }
 }

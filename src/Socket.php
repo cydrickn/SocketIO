@@ -211,6 +211,16 @@ class Socket
         $response->emit($eventName, ...$args);
     }
 
+    public function ack(int $num, ...$args): void
+    {
+        $response = $this->responseFactory->create($this);
+        if ($this->fd !== self::SYSTEM_FD) {
+            $response->to($this->fd, Response::TO_TYPE_FD);
+        }
+
+        $response->ack($num, ...$args);
+    }
+
     public function broadcast(): Response
     {
         $response = $this->responseFactory->create($this);

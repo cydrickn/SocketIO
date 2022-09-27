@@ -114,4 +114,23 @@ class Response
 
         return $this->socket->send($data, $this->receivers, $this->excludes);
     }
+
+    public function ack(int $callbackNum, ...$args): int
+    {
+        if ($this->sent) {
+            throw new \Exception('This message already sent.');
+        }
+
+        if ($this->dontSend) {
+            return 0;
+        }
+
+        $data = $this->type->value . MessageType::ACK->value . $callbackNum;
+        $message = json_encode([...$args]);
+        $data .= $message;
+
+        $this->sent = true;
+
+        return $this->socket->send($data, $this->receivers, $this->excludes);
+    }
 }
