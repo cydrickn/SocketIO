@@ -186,7 +186,7 @@ class Socket
         return $this->responseFactory->create($this);
     }
 
-    public function ping(string $message): void
+    public function ping(string $message = ''): void
     {
         $pingFrame = new Frame();
         $pingFrame->opcode = WEBSOCKET_OPCODE_PING;
@@ -195,7 +195,7 @@ class Socket
         $this->sendTo($this->fd, (string) Type::PING->value);
     }
 
-    public function pong(string $message): void
+    public function pong(string $message = ''): void
     {
         $pongFrame = new Frame();
         // Setup a new data frame to send back a pong to the client
