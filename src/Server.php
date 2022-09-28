@@ -16,6 +16,7 @@ use Cydrickn\SocketIO\Router\RouterProvider;
 use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Session\SessionsTable;
 use Cydrickn\SocketIO\Session\SessionStorageInterface;
+use Swoole\Constant;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Swoole\Table;
@@ -60,6 +61,11 @@ class Server extends Socket
         $this->sessionStorage = $sessionStorage ?? new SessionsTable([['fd', Table::TYPE_INT], ['sid', Table::TYPE_STRING, 64]]);
 
         $server = new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS);
+        $setting = [
+            ...$this->config['settings'],
+            Constant::OPTION_OPEN_WEBSOCKET_PONG_FRAME => true,
+            Constant::OPTION_OPEN_WEBSOCKET_PING_FRAME => true,
+        ];
         $server->set($this->config['settings']);
         $router = $router ?? new Router();
         $rooms = $rooms ?? new RoomsTable();
@@ -182,8 +188,8 @@ class Server extends Socket
 
         $message = json_encode([
             'sid' => $socket->sid,
-            'pingInterval' => 25000,
-            'pingTimeout' => 20000,
+            'pingInterval' => $socket->pingInterval,
+            'pingTimeout' => $socket->pingTimeout,
             'upgrades' => [],
         ]);
 
@@ -222,7 +228,7 @@ class Server extends Socket
                 $this->router->dispatch($connectionMessage);
             }
         } elseif ($message->getType() === Type::PONG) {
-
+            $this->pingTimerManager->removeTimeout($frame->fd);
         } else {
             $this->router->dispatch($message);
         }

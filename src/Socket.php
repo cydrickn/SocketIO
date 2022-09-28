@@ -35,9 +35,9 @@ class Socket
 
     public string $sid = '';
 
-    public int $pingInterval = 25000;
+    public int $pingInterval = 20000;
 
-    public int $pingTimeout = 20000;
+    public int $pingTimeout = 25000;
 
     protected ResponseFactory $responseFactory;
 
@@ -186,9 +186,23 @@ class Socket
         return $this->responseFactory->create($this);
     }
 
-    public function ping(): void
+    public function ping(string $message): void
     {
+        $pingFrame = new Frame();
+        $pingFrame->opcode = WEBSOCKET_OPCODE_PING;
+        $this->server->push($this->fd, $pingFrame);
+
         $this->sendTo($this->fd, (string) Type::PING->value);
+    }
+
+    public function pong(string $message): void
+    {
+        $pongFrame = new Frame();
+        // Setup a new data frame to send back a pong to the client
+        $pongFrame->opcode = WEBSOCKET_OPCODE_PONG;
+        $this->server->push($this->fd, $pongFrame);
+
+        $this->sendTo($this->fd, (string) Type::PONG->value);
     }
 
     public function to(int|string $fd, int $type = Response::TO_TYPE_ROOM): Response
