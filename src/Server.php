@@ -37,11 +37,11 @@ class Server extends Socket
 
     protected array $sockets = [];
 
-    protected SocketManager $socketManager;
+    protected ?SocketManager $socketManager = null;
 
-    protected PingTimerManager $pingTimerManager;
+    protected ?PingTimerManager $pingTimerManager = null;
 
-    protected SessionStorageInterface $sessionStorage;
+    protected ?SessionStorageInterface $sessionStorage = null;
 
     protected array $middlewares = [];
     protected array $handShakeMiddleware = [];
@@ -83,6 +83,11 @@ class Server extends Socket
         ];
 
         parent::__construct($server, $router, $rooms, $responseFactory);
+    }
+
+    public function setSessionStorage(SessionStorageInterface $sessionStorage)
+    {
+        $this->sessionStorage = $sessionStorage;
     }
 
     public function onStart()

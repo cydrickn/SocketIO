@@ -14,8 +14,6 @@ class SessionsNative implements SessionStorageInterface
         if (!file_exists($this->pathStorage)) {
             mkdir($this->pathStorage);
         }
-
-        $this->channel = new Channel(10);
     }
 
     public function get(string $sessionId): array|null
