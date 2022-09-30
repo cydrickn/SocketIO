@@ -157,7 +157,7 @@ class Server extends Socket
 
         $continue = true;
         foreach ($this->handShakeMiddleware as $middleware) {
-            call_user_func($middleware, $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
+            call_user_func($middleware[0], $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
                 if ($error) {
                     $continue = false;
                 }
@@ -216,7 +216,7 @@ class Server extends Socket
         if ($message->getType() === Type::MESSAGE && $message->getMessageType() === MessageType::CONNECT) {
             $continue = true;
             foreach ($this->middlewares as $middleware) {
-                call_user_func($middleware, $socket, function (?\Error $error = null)  use ($socket, &$continue) {
+                call_user_func($middleware[0], $socket, function (?\Error $error = null)  use ($socket, &$continue) {
                     if ($error) {
                         $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::ERROR->value . json_encode(['message' => $error->getMessage()]));
                         $continue = false;
@@ -305,14 +305,37 @@ class Server extends Socket
         $this->router->setProvider($routerProvider);
     }
 
-    public function use(callable $middleware, bool $isHandshake = false): void
+    public function use(callable $middleware, callable|bool $isHandshake = false, callable|int $priority = 100): void
     {
+        if (is_callable($priority)) {
+            $priority = call_user_func($priority);
+        }
+
+        if (is_callable($isHandshake)) {
+            $isHandshake = call_user_func($isHandshake);
+        }
+
         if ($isHandshake) {
-            $this->handShakeMiddleware[] = $middleware;
+            $this->handShakeMiddleware[] = [$middleware, $priority];
+            usort($this->handShakeMiddleware, function ($a, $b) {
+                if ($a[1] === $b[1]) {
+                    return 0;
+                }
+
+                return $a[1] < $b[1]? 1 : 0;
+            });
+
             return;
         }
 
-        $this->middlewares[] = $middleware;
+        $this->middlewares[] = [$middleware, $priority];
+        usort($this->middlewares, function ($a, $b) {
+            if ($a[1] === $b[1]) {
+                return 0;
+            }
+
+            return $a[1] < $b[1]? 1 : 0;
+        });
     }
 
     public function getSessionStorage(): SessionStorageInterface
