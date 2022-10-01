@@ -7,7 +7,7 @@ use Cydrickn\SocketIO\Server;
 use Cydrickn\SocketIO\Socket;
 use Swoole\Http\Response;
 
-class CookieSessionMiddleware
+class CookieSessionMiddleware implements HandshakeMiddlewareInterface
 {
     public function __construct(private Server $server, private string $cookieName = 'PHPSESID')
     {
@@ -26,5 +26,10 @@ class CookieSessionMiddleware
         $response->setCookie($this->cookieName, $sessionId);
 
         $next();
+    }
+
+    public function getPriority(): int
+    {
+        return 500;
     }
 }

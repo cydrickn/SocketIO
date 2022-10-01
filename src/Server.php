@@ -9,6 +9,9 @@ use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Message\Request as MessageRequest;
 use Cydrickn\SocketIO\Message\ResponseFactory;
 use Cydrickn\SocketIO\Message\ResponseFactoryInterface;
+use Cydrickn\SocketIO\Middleware\HandshakeMiddlewareInterface;
+use Cydrickn\SocketIO\Middleware\InvokableMiddlewareInterface;
+use Cydrickn\SocketIO\Middleware\MiddlewareInterface;
 use Cydrickn\SocketIO\Room\RoomsInterface;
 use Cydrickn\SocketIO\Room\RoomsTable;
 use Cydrickn\SocketIO\Router\Router;
@@ -66,7 +69,7 @@ class Server extends Socket
             Constant::OPTION_OPEN_WEBSOCKET_PONG_FRAME => true,
             Constant::OPTION_OPEN_WEBSOCKET_PING_FRAME => true,
         ];
-        $server->set($this->config['settings']);
+        $server->set($setting);
         $router = $router ?? new Router();
         $rooms = $rooms ?? new RoomsTable();
         $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
@@ -157,7 +160,12 @@ class Server extends Socket
 
         $continue = true;
         foreach ($this->handShakeMiddleware as $middleware) {
-            call_user_func($middleware[0], $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
+            $callback = $middleware[0];
+            if ($callback instanceof MiddlewareInterface) {
+                $callback = [$middleware[0], 'handle'];
+            }
+
+            call_user_func($callback, $socket, $response, function (?\Error $error = null)  use ($socket, &$continue) {
                 if ($error) {
                     $continue = false;
                 }
@@ -216,7 +224,7 @@ class Server extends Socket
         if ($message->getType() === Type::MESSAGE && $message->getMessageType() === MessageType::CONNECT) {
             $continue = true;
             foreach ($this->middlewares as $middleware) {
-                call_user_func($middleware[0], $socket, function (?\Error $error = null)  use ($socket, &$continue) {
+                call_user_func([$middleware[0], 'handle'], $socket, function (?\Error $error = null)  use ($socket, &$continue) {
                     if ($error) {
                         $socket->sendTo($socket->getFd(), Type::MESSAGE->value . MessageType::ERROR->value . json_encode(['message' => $error->getMessage()]));
                         $continue = false;
@@ -305,17 +313,21 @@ class Server extends Socket
         $this->router->setProvider($routerProvider);
     }
 
-    public function use(callable $middleware, callable|bool $isHandshake = false, callable|int $priority = 100): void
+    public function use(MiddlewareInterface|callable $middleware, ?bool $handshake = null, ?int $priority = null): void
     {
-        if (is_callable($priority)) {
-            $priority = call_user_func($priority);
+        if ($priority === null && $middleware instanceof MiddlewareInterface) {
+            $priority = $middleware->getPriority();
+        } elseif ($priority === null) {
+            $priority = 500;
         }
 
-        if (is_callable($isHandshake)) {
-            $isHandshake = call_user_func($isHandshake);
+        if ($handshake === null && $middleware instanceof HandshakeMiddlewareInterface) {
+            $handshake = true;
+        } elseif ($handshake === null) {
+            $handshake = false;
         }
 
-        if ($isHandshake) {
+        if ($handshake) {
             $this->handShakeMiddleware[] = [$middleware, $priority];
             usort($this->handShakeMiddleware, function ($a, $b) {
                 if ($a[1] === $b[1]) {

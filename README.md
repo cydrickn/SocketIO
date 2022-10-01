@@ -201,6 +201,9 @@ $server->on(function (\Cydrickn\SocketIO\Socket $socket, \Swoole\Http\Response $
 }, true);
 ```
 
+If you want to create a middleware as a class we recommend to implement the `Cydrickn\SocketIO\Middleware\MiddlewareInterface`
+and if for handshake use `Cydrickn\SocketIO\Middleware\HandshakeMiddlewareInterface`
+
 Example of middleware that use in handshake is the [Cydrickn\SocketIO\Middleware\CookieSessionMiddleware](/src/Middleware/CookieSessionMiddleware.php).
 This middleware will create a session that uses the cookie and if the client did not send the session cookie then it will
 create a cookie and response it from the handshake.
