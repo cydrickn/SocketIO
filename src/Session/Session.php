@@ -37,4 +37,9 @@ class Session
     {
         $this->sessionStorage->set($this->id, $this->data);
     }
+
+    public function del(): void
+    {
+        $this->sessionStorage->del($this->id);
+    }
 }
