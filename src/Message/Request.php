@@ -47,7 +47,7 @@ class Request
         if (!empty($packetData)) {
             $path .= $packetData[0];
             foreach ($packetData as $key => $datum) {
-                if ($key === 0) {
+                if ($key === 0 && $messageType !== MessageType::ACK) {
                     continue;
                 }
                 $data[] = $datum;
@@ -110,7 +110,7 @@ class Request
     public function getData(): array
     {
         $data = $this->data;
-        if ($this->hasCallback()) {
+        if ($this->hasCallback() && $this->messageType !== MessageType::ACK) {
             $data[] = function (...$args) {
                 $this->socket->ack($this->getCallbackNum(), ...$args);
             };

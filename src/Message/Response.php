@@ -4,6 +4,8 @@ namespace Cydrickn\SocketIO\Message;
 
 use Cydrickn\SocketIO\Enum\MessageType;
 use Cydrickn\SocketIO\Enum\Type;
+use Cydrickn\SocketIO\Manager\AckManager;
+use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Socket;
 use Swoole\WebSocket\Frame;
@@ -40,12 +42,18 @@ class Response
 
     private FdFetcher $fdFetcher;
 
-    public static function new(Socket $socket, FdFetcher $fdFetcher, int $fd = Socket::SYSTEM_FD): static
+    private AckManager $ackManager;
+
+    private SocketManager $socketManager;
+
+    public static function new(Socket $socket, FdFetcher $fdFetcher, AckManager $ackManager, SocketManager $socketManager, int $fd = Socket::SYSTEM_FD): static
     {
         $response = new static($socket);
         $response->fd = $fd;
         $response->sender = $fd;
         $response->fdFetcher = $fdFetcher;
+        $response->ackManager = $ackManager;
+        $response->socketManager = $socketManager;
 
         return $response;
     }
@@ -102,17 +110,29 @@ class Response
             return 0;
         }
 
-        $data = $this->type->value;
+        $dataMessage = $this->type->value;
         if ($this->type === Type::MESSAGE) {
-            $data .= $this->messageType->value;
+            $dataMessage .= $this->messageType->value;
         }
 
-        $message = json_encode([$eventName, ...$args]);
-        $data .= $message;
+        $arguments = $args;
+        $callback = function ($fd) {
+        };
+        if (count($args) > 0 && is_callable($args[count($args) - 1])) {
+            $ackCallback = $args[count($args) - 1];
+            array_pop($arguments);
+            $callback = function ($fd, &$data) use ($ackCallback, $dataMessage, $eventName, $arguments) {
+                $ackNum = $this->socketManager->incrementAck($fd);
+                $this->ackManager->add($fd . '::' . $ackNum, $ackCallback);
+                $data = $dataMessage . $ackNum . json_encode([$eventName, ...$arguments]);
+            };
+        }
 
+        $message = json_encode([$eventName, ...$arguments]);
+        $data = $dataMessage . $message;
         $this->sent = true;
 
-        return $this->socket->send($data, $this->receivers, $this->excludes);
+        return $this->socket->send($data, $this->receivers, $this->excludes, WEBSOCKET_OPCODE_TEXT, 50, $callback);
     }
 
     public function ack(int $callbackNum, ...$args): int

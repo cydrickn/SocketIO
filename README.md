@@ -101,6 +101,25 @@ The toAll will emit a message to all connected clients including the current cli
 $socket->toAll()->emit('hi', ['name' => 'Juan']);
 ```
 
+### Acknowledgements
+
+Same with the socket io for nodejs,
+you just need to add a callable as the last argument in the emit
+
+Server
+```php
+$socket->emit('hi', function () {
+    //...
+});
+```
+
+Client
+```js
+socket.on('hi', (callback) => {
+    callback('hello');
+});
+```
+
 ### Listening
 
 To listen to any event

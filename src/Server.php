@@ -4,6 +4,7 @@ namespace Cydrickn\SocketIO;
 
 use Cydrickn\SocketIO\Enum\MessageType;
 use Cydrickn\SocketIO\Enum\Type;
+use Cydrickn\SocketIO\Manager\AckManager;
 use Cydrickn\SocketIO\Manager\PingTimerManager;
 use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Message\Request as MessageRequest;
@@ -46,6 +47,8 @@ class Server extends Socket
 
     protected ?SessionStorageInterface $sessionStorage = null;
 
+    protected AckManager $ackManager;
+
     protected array $middlewares = [];
     protected array $handShakeMiddleware = [];
 
@@ -72,7 +75,12 @@ class Server extends Socket
         $server->set($setting);
         $router = $router ?? new Router();
         $rooms = $rooms ?? new RoomsTable();
-        $responseFactory = $responseFactory ?? new ResponseFactory(new FdFetcher($this, $rooms, $this->socketManager));
+        $this->ackManager = new AckManager();
+        $responseFactory = $responseFactory ?? new ResponseFactory(
+            new FdFetcher($this, $rooms, $this->socketManager),
+            $this->socketManager,
+            $this->ackManager
+        );
 
         $this->serverEvents = [
             'Start' => [$this, 'onStart'],
@@ -83,6 +91,7 @@ class Server extends Socket
             'handshake' => [$this, 'onHandshake'],
             'BeforeReload' => [$this, 'onBeforeReload'],
             'WorkerExit' => [$this, 'onWorkerExit'],
+            'PipeMessage' => [$this, 'onPipeMessage'],
         ];
 
         parent::__construct($server, $router, $rooms, $responseFactory);
@@ -242,9 +251,45 @@ class Server extends Socket
             }
         } elseif ($message->getType() === Type::PONG) {
             $this->pingTimerManager->removeTimeout($frame->fd);
+        } elseif ($message->getType() === Type::MESSAGE && $message->getMessageType() === MessageType::ACK) {
+            if (!$this->ackManager->has($message->getFd() . '::' . $message->getCallbackNum())) {
+                for ($i = 0; $i < $this->config['settings'][Constant::OPTION_WORKER_NUM]; $i++) {
+                    if ($this->server->getWorkerId() === $i) {
+                        continue;
+                    }
+
+                    $this->server->sendMessage(json_encode([
+                        'data' => $message->getData(),
+                        'type' => $message->getType()->value,
+                        'messageType' => $message->getMessageType()->value,
+                        'fd' => $message->getFd(),
+                        'key' => $message->getFd() . '::' . $message->getCallbackNum(),
+                    ]), $i);
+                }
+                return;
+            }
+            $ackCallback = $this->ackManager->get($message->getFd() . '::' . $message->getCallbackNum());
+
+            call_user_func_array($ackCallback, $message->getData());
         } else {
             $this->router->dispatch($message);
         }
+    }
+
+    public function onPipeMessage(WebsocketServer $server, int $workerId, mixed $data)
+    {
+        $message = json_decode($data, true);
+
+        if (!($message['type'] === Type::MESSAGE->value && $message['messageType'] === MessageType::ACK->value)) {
+            return;
+        }
+
+        if (!$this->ackManager->has($message['key'])) {
+            return;
+        }
+
+        $ackCallback = $this->ackManager->get($message['key']);
+        call_user_func_array($ackCallback, $message['data']);
     }
 
     public function onClose(WebsocketServer $server, int $fd) {

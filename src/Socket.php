@@ -68,21 +68,25 @@ class Socket
         return $this->server->isEstablished($fd);
     }
 
-    public function sendTo(int $receiver, Frame|string $data, int $opcode = WEBSOCKET_OPCODE_TEXT, bool $finish = true): bool
+    public function sendTo(int $receiver, Frame|string $data, int $opcode = WEBSOCKET_OPCODE_TEXT, bool $finish = true, callable|null $callback = null): bool
     {
         if (!$this->isEstablished($receiver)) {
             return  false;
         }
 
+        if (is_callable($callback)) {
+            $callback($receiver, $data, $opcode, $finish);
+        }
+
         return $this->server->push($receiver, $data, $opcode, $finish);
     }
 
-    public function sendToAll(Frame|string $data, int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50): int
+    public function sendToAll(Frame|string $data, int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50, callable|null $callback = null): int
     {
-        return $this->sendToSome($data, [], [], $opcode, $pageSize);
+        return $this->sendToSome($data, [], [], $opcode, $pageSize, $callback);
     }
 
-    public function sendToSome(Frame|string $data, array $receivers = [], array $excludes = [], int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50): int
+    public function sendToSome(Frame|string $data, array $receivers = [], array $excludes = [], int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50, callable|null $callback = null): int
     {
         $count = 0;
 
@@ -93,38 +97,38 @@ class Socket
 
         if (!empty($receivers)) {
             foreach ($receivers as $receiver) {
-                $ok = $this->sendTo($receiver, $data, $opcode);
+                $ok = $this->sendTo($receiver, $data, $opcode, true, $callback);
                 $count += $ok ? 1 : 0;
             }
 
             return $count;
         }
 
-        $this->eachConnection(function ($fd) use ($data,$opcode, $excludes, &$count) {
+        $this->eachConnection(function ($fd) use ($data,$opcode, $excludes, $callback, &$count) {
             if (in_array($fd, $excludes)) {
                 return;
             }
 
-            $ok = $this->sendTo($fd, $data, $opcode);
+            $ok = $this->sendTo($fd, $data, $opcode, true, $callback);
             $count += $ok ? 1 : 0;
         }, $pageSize);
 
         return $count;
     }
 
-    public function send(Frame|string $data, array $receivers = [], array $excludes = [], int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50): int
+    public function send(Frame|string $data, array $receivers = [], array $excludes = [], int $opcode = WEBSOCKET_OPCODE_TEXT, int $pageSize = 50, callable|null $callback = null): int
     {
         if (count($receivers) === 1) {
-            $ok = $this->sendTo($receivers[0], $data, $opcode);
+            $ok = $this->sendTo($receivers[0], $data, $opcode, true, $callback);
 
             return $ok ? 1 : 0;
         }
 
         if (empty($receivers) && empty($excludes)) {
-            return $this->sendToAll($data, $opcode);
+            return $this->sendToAll($data, $opcode, $pageSize, $callback);
         }
 
-        return $this->sendToSome($data, $receivers, $excludes, $opcode, $pageSize);
+        return $this->sendToSome($data, $receivers, $excludes, $opcode, $pageSize, $callback);
     }
 
     public function eachConnection(callable $handler, int $pageSize = 50): int
