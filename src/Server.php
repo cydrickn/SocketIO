@@ -20,6 +20,7 @@ use Cydrickn\SocketIO\Router\RouterProvider;
 use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Session\SessionsTable;
 use Cydrickn\SocketIO\Session\SessionStorageInterface;
+use Cydrickn\SocketIO\Table\Timer;
 use Swoole\Constant;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
@@ -49,6 +50,8 @@ class Server extends Socket
 
     protected AckManager $ackManager;
 
+    protected Timer $timer;
+
     protected array $middlewares = [];
     protected array $handShakeMiddleware = [];
 
@@ -65,6 +68,7 @@ class Server extends Socket
         $this->socketManager = new SocketManager();
         $this->pingTimerManager = new PingTimerManager();
         $this->sessionStorage = $sessionStorage ?? new SessionsTable([['fd', Table::TYPE_INT], ['sid', Table::TYPE_STRING, 64]]);
+        $this->timer = new Timer();
 
         $server = new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS);
         $setting = [
@@ -79,7 +83,8 @@ class Server extends Socket
         $responseFactory = $responseFactory ?? new ResponseFactory(
             new FdFetcher($this, $rooms, $this->socketManager),
             $this->socketManager,
-            $this->ackManager
+            $this->ackManager,
+            $this->timer
         );
 
         $this->serverEvents = [
@@ -268,9 +273,15 @@ class Server extends Socket
                 }
                 return;
             }
-            $ackCallback = $this->ackManager->get($message->getFd() . '::' . $message->getCallbackNum());
 
-            call_user_func_array($ackCallback, $message->getData());
+            $ackId = $message->getFd() . '::' . $message->getCallbackNum();
+            $ackCallback = $this->ackManager->get($ackId);
+            if ($ackCallback['timeout'] > 0) {
+                $this->timer->clear('ack::' . $ackCallback['group']);
+                call_user_func($ackCallback['callback'], true, ...$message->getData());
+            } else {
+                call_user_func($ackCallback['callback'], ...$message->getData());
+            }
         } else {
             $this->router->dispatch($message);
         }
@@ -289,7 +300,13 @@ class Server extends Socket
         }
 
         $ackCallback = $this->ackManager->get($message['key']);
-        call_user_func_array($ackCallback, $message['data']);
+
+        if ($ackCallback['timeout'] > 0) {
+            $this->timer->clear('ack::' . $ackCallback['group']);
+            call_user_func($ackCallback['callback'], true, ...$message['data']);
+        } else {
+            call_user_func($ackCallback['callback'], ...$message['data']);
+        }
     }
 
     public function onClose(WebsocketServer $server, int $fd) {
@@ -408,5 +425,10 @@ class Server extends Socket
     public function setSystemEvents(string $name, callable $callable): void
     {
         $this->serverEvents[$name] = $callable;
+    }
+
+    public function getTimer(): Timer
+    {
+        return $this->timer;
     }
 }

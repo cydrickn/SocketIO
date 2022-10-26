@@ -2,12 +2,14 @@
 
 namespace Cydrickn\SocketIO\Message;
 
+use Cydrickn\SocketIO\Table\Timer;
 use Cydrickn\SocketIO\Enum\MessageType;
 use Cydrickn\SocketIO\Enum\Type;
 use Cydrickn\SocketIO\Manager\AckManager;
 use Cydrickn\SocketIO\Manager\SocketManager;
 use Cydrickn\SocketIO\Service\FdFetcher;
 use Cydrickn\SocketIO\Socket;
+use MongoDB\BSON\ObjectId;
 use Swoole\WebSocket\Frame;
 
 class Response
@@ -46,14 +48,27 @@ class Response
 
     private SocketManager $socketManager;
 
-    public static function new(Socket $socket, FdFetcher $fdFetcher, AckManager $ackManager, SocketManager $socketManager, int $fd = Socket::SYSTEM_FD): static
-    {
+    private int $timeout = 0;
+
+    private array $timeoutParams = [];
+
+    private Timer $timer;
+
+    public static function new(
+        Socket $socket,
+        FdFetcher $fdFetcher,
+        AckManager $ackManager,
+        SocketManager $socketManager,
+        Timer $timer,
+        int $fd = Socket::SYSTEM_FD,
+    ): static {
         $response = new static($socket);
         $response->fd = $fd;
         $response->sender = $fd;
         $response->fdFetcher = $fdFetcher;
         $response->ackManager = $ackManager;
         $response->socketManager = $socketManager;
+        $response->timer = $timer;
 
         return $response;
     }
@@ -121,10 +136,19 @@ class Response
         if (count($args) > 0 && is_callable($args[count($args) - 1])) {
             $ackCallback = $args[count($args) - 1];
             array_pop($arguments);
-            $callback = function ($fd, &$data) use ($ackCallback, $dataMessage, $eventName, $arguments) {
+            $group = new ObjectId();
+            $callback = function ($fd, &$data) use ($ackCallback, $dataMessage, $eventName, $arguments, $group) {
                 $ackNum = $this->socketManager->incrementAck($fd);
-                $this->ackManager->add($fd . '::' . $ackNum, $ackCallback);
+                $this->ackManager->add($fd . '::' . $ackNum, $ackCallback, $this->timeout, (string) $group);
                 $data = $dataMessage . $ackNum . json_encode([$eventName, ...$arguments]);
+
+                if ($this->timeout > 0) {
+                    $this->timer->interval('ack::' . $group, $this->timeout, function ($info, $ackId, ...$args) {
+                        $ackCallback = $this->ackManager->get($ackId);
+                        call_user_func($ackCallback['callback'], true, ...$args);
+                        $this->timer->clear($info['id']);
+                    }, $fd . '::' . $ackNum, ...$this->timeoutParams);
+                }
             };
         }
 
@@ -152,5 +176,13 @@ class Response
         $this->sent = true;
 
         return $this->socket->send($data, $this->receivers, $this->excludes);
+    }
+
+    public function timeout(int $milliseconds, ...$args): self
+    {
+        $this->timeout = $milliseconds;
+        $this->timeoutParams = $args;
+
+        return $this;
     }
 }

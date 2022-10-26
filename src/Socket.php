@@ -292,4 +292,14 @@ class Socket
     {
         return $this->session;
     }
+
+    public function timeout(int $milliseconds, ...$args): Response
+    {
+        $response = $this->responseFactory->create($this);
+        if ($this->fd !== self::SYSTEM_FD) {
+            $response->to($this->fd, Response::TO_TYPE_FD);
+        }
+
+        return $response->timeout($milliseconds, ...$args);
+    }
 }

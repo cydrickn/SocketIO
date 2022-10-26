@@ -32,7 +32,7 @@ class FdFetcher
 
     protected function findBySid(string|int $sid): array
     {
-        $fd = $this->socketManager->getFdBySid($sid);
+        $fd = $this->socketManager->findFdBySid($sid);
         if ($fd === null) {
             return [];
         }

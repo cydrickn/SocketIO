@@ -89,4 +89,11 @@ class SocketManager
     {
         return $this->socketFd->incr($fd, 'ack', 1);
     }
+
+    public function findFdBySid(string $sid): int|null
+    {
+        $fd = $this->socketTable->get($sid, 'fd');
+
+        return $fd === false ? null : $fd;
+    }
 }

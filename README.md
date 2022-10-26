@@ -120,6 +120,31 @@ socket.on('hi', (callback) => {
 });
 ```
 
+#### With Timeout
+
+Assign a timeout to each emit:
+
+```php
+// timeout for 5 seconds
+$socket->timeout(5000)->emit('hi', function (bool $err) {
+    if ($err) {
+        // the other side did not acknowledge the event in the given delay
+    }
+});
+```
+
+Add callback default arguments value for timeout
+
+```php
+// timeout for 5 seconds
+$socket->timeout(5000, 'Juan')->emit('hi', function (bool $err, string $name) {
+    var_dump($name); // if the other side did not acknowledge the event the $name will be 'Juan'
+    if ($err) {
+        // the other side did not acknowledge the event in the given delay
+    }
+});
+```
+
 ### Listening
 
 To listen to any event
