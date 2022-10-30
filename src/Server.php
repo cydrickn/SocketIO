@@ -431,4 +431,9 @@ class Server extends Socket
     {
         return $this->timer;
     }
+
+    public function onRoomEvent(string $event, callable $callback): void
+    {
+        $this->rooms->on($event, $callback);
+    }
 }

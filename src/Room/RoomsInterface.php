@@ -21,4 +21,6 @@ interface RoomsInterface
     public function stop(): void;
 
     public function count(): int;
+
+    public function on(string $event, callable $callback): void;
 }

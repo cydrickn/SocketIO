@@ -13,6 +13,13 @@ class RoomsTable implements RoomsInterface
     private Channel $roomsChannel;
     private bool $stopped = false;
 
+    protected array $roomEvents = [
+        'create-room' => [],
+        'delete-room' => [],
+        'join-room' => [],
+        'leave-room' => [],
+    ];
+
     public function __construct()
     {
         $this->table = new SwooleTable(2048);
@@ -23,11 +30,13 @@ class RoomsTable implements RoomsInterface
     public function add(string $roomName): void
     {
         $this->table->set($roomName, ['fds' => '[]']);
+        $this->dispatch('create-room', $roomName);
     }
 
     public function remove(string $roomName): void
     {
         $this->table->del($roomName);
+        $this->dispatch('delete-room', $roomName);
     }
 
     public function stop(): void
@@ -79,6 +88,7 @@ class RoomsTable implements RoomsInterface
         $fds[] = $fd;
 
         $this->table->set($roomName, ['fds' => json_encode($fds)]);
+        $this->dispatch('join-room', $roomName, $fd);
     }
 
     private function executeLeave(string $roomName, int $fd)
@@ -94,6 +104,7 @@ class RoomsTable implements RoomsInterface
         }));
 
         $this->table->set($roomName, ['fds' => json_encode($fds)]);
+        $this->dispatch('leave-room', $roomName, $fd);
     }
 
     public function getFds(string $roomName): array
@@ -123,5 +134,19 @@ class RoomsTable implements RoomsInterface
     {
 
         return $this->table->count();
+    }
+
+    public function on(string $event, callable $callback): void
+    {
+        $this->roomEvents[$event][] = $callback;
+    }
+
+    public function dispatch(string $event, ...$args): void
+    {
+        Coroutine::create(function () use ($event, $args) {
+            foreach ($this->roomEvents[$event] as $roomEvent) {
+                call_user_func_array($roomEvent, $args);
+            }
+        });
     }
 }
