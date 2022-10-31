@@ -68,7 +68,7 @@ class Server extends Socket
         $this->socketManager = new SocketManager();
         $this->pingTimerManager = new PingTimerManager();
         $this->sessionStorage = $sessionStorage ?? new SessionsTable([['fd', Table::TYPE_INT], ['sid', Table::TYPE_STRING, 64]]);
-        $this->timer = new Timer();
+        $this->timer = new Timer($this);
 
         $server = new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS);
         $setting = [
@@ -278,7 +278,7 @@ class Server extends Socket
             $ackCallback = $this->ackManager->get($ackId);
             if ($ackCallback['timeout'] > 0) {
                 $this->timer->clear('ack::' . $ackCallback['group']);
-                call_user_func($ackCallback['callback'], true, ...$message->getData());
+                call_user_func($ackCallback['callback'], false, ...$message->getData());
             } else {
                 call_user_func($ackCallback['callback'], ...$message->getData());
             }
@@ -291,10 +291,29 @@ class Server extends Socket
     {
         $message = json_decode($data, true);
 
-        if (!($message['type'] === Type::MESSAGE->value && $message['messageType'] === MessageType::ACK->value)) {
+        if ($message['type'] === Type::MESSAGE->value && $message['messageType'] === MessageType::ACK->value) {
+            $this->ackWorkerMessage($server, $workerId, $message);
             return;
         }
 
+        if ($message['type'] === 'timer:clear') {
+            $this->timer->clear($message['id']);
+            return;
+        }
+
+        if ($message['type'] === 'timer:pause') {
+            $this->timer->pause($message['id']);
+            return;
+        }
+
+        if ($message['type'] === 'timer:resume') {
+            $this->timer->resume($message['id']);
+            return;
+        }
+    }
+
+    protected function ackWorkerMessage(WebsocketServer $server, int $workerId, array $message)
+    {
         if (!$this->ackManager->has($message['key'])) {
             return;
         }
@@ -303,7 +322,7 @@ class Server extends Socket
 
         if ($ackCallback['timeout'] > 0) {
             $this->timer->clear('ack::' . $ackCallback['group']);
-            call_user_func($ackCallback['callback'], true, ...$message['data']);
+            call_user_func($ackCallback['callback'], false, ...$message['data']);
         } else {
             call_user_func($ackCallback['callback'], ...$message['data']);
         }

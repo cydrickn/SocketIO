@@ -144,6 +144,9 @@ class Response
 
                 if ($this->timeout > 0) {
                     $this->timer->interval('ack::' . $group, $this->timeout, function ($info, $ackId, ...$args) {
+                        if (!$this->ackManager->has($ackId)) {
+                            return;
+                        }
                         $ackCallback = $this->ackManager->get($ackId);
                         call_user_func($ackCallback['callback'], true, ...$args);
                         $this->timer->clear($info['id']);
