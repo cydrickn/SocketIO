@@ -52,6 +52,6 @@ class Timer
 
     public function exists(string $id): bool
     {
-        return $this->timer->exists($id);
+        return $this->table->exists($id);
     }
 }
