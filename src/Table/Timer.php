@@ -17,17 +17,11 @@ class Timer
         $this->table->create();
     }
 
-    /**
-     * Don't use this for now, since there is error in timeout
-     *
-     * @link https://github.com/openswoole/swoole-src/issues/269
-     */
     public function timeout($id, $timeout, callable $callback, ...$params): int
     {
-        throw new \Exception("Don't use this for now, since there is error in timeout after in swoole core");
-
-        $timerId = SwooleTimer::after($timeout, function (int $timerId, $callback, $id, ...$params) {
-            call_user_func($callback, ['timerId' => $timerId, 'id' => $id, 'called' => 0], ...$params);
+        $timerId = SwooleTimer::tick($timeout, function (int $timerId, $callback, $id, ...$params) {
+            $called = $this->table->incr($id, 'called');
+            call_user_func($callback, ['timerId' => $timerId, 'id' => $id, 'called' => $called], ...$params);
             $this->clear($id);
         }, $callback, $id, ...$params);
 
@@ -54,5 +48,10 @@ class Timer
 
         SwooleTimer::clear($timer);
         $this->table->del($id);
+    }
+
+    public function exists(string $id): bool
+    {
+        return $this->timer->exists($id);
     }
 }

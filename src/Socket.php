@@ -138,6 +138,10 @@ class Socket
 
         while (true) {
             $list = $this->server->getClientList($startFd, $pageSize);
+            if (!$list) {
+                break;
+            }
+
             $numOfConnections = count($list);
             if ($numOfConnections === 0) {
                 break;
