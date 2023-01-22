@@ -103,7 +103,11 @@ class RoomsTable implements RoomsInterface
             return $value !== $fd;
         }));
 
-        $this->table->set($roomName, ['fds' => json_encode($fds)]);
+        if (empty($fds)) {
+            $this->table->del($roomName);
+        } else {
+            $this->table->set($roomName, ['fds' => json_encode($fds)]);
+        }
         $this->dispatch('leave-room', $roomName, $fd);
     }
 
