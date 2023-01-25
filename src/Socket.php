@@ -159,7 +159,7 @@ class Socket
                 break;
             }
 
-            $startFd = end($fdList);
+            $startFd = end($list);
         }
 
         return $count;
