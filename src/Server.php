@@ -200,7 +200,7 @@ class Server extends Socket
         $response->status(101);
         $response->end();
 
-        $this->server->defer(function () use ($socket) {
+        \Swoole\Event::defer(function () use ($socket) {
             $this->socketManager->add($socket);
             call_user_func($this->server->getCallback('Open'), $this->server, $socket);
         });
