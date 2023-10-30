@@ -438,7 +438,7 @@ class Server extends Socket
 
     public function removeSystemEvents(string $name): void
     {
-        unset($this->serverEvents, $name);
+        unset($this->serverEvents[$name]);
     }
 
     public function setSystemEvents(string $name, callable $callable): void
