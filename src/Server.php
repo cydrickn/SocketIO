@@ -70,7 +70,7 @@ class Server extends Socket
         $this->sessionStorage = $sessionStorage ?? new SessionsTable([['fd', Table::TYPE_INT], ['sid', Table::TYPE_STRING, 64]]);
         $this->timer = new Timer($this);
 
-        $server = new WebsocketServer($this->config['host'], $this->config['port'], SWOOLE_PROCESS);
+        $server = new WebsocketServer($this->config['host'], $this->config['port'], $this->config['mode'], $this->config['sock_type']);
         $setting = [
             ...$this->config['settings'],
             Constant::OPTION_OPEN_WEBSOCKET_PONG_FRAME => true,
