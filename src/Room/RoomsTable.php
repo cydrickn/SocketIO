@@ -49,7 +49,7 @@ class RoomsTable implements RoomsInterface
         $this->stopped = false;
         $this->roomsChannel = new Channel(10);
         Coroutine::create(function () {
-            $cid = Coroutine::getuid();
+            $cid = Coroutine::getcid();
             while (!$this->stopped) {
                 $data = $this->roomsChannel->pop(1);
                 list($type, $roomName, $fd) = $data;

@@ -28,7 +28,7 @@ trait ChannelTrait
         $this->setChannel(10);
 
         Coroutine::create(function () {
-            $cid = Coroutine::getuid();
+            $cid = Coroutine::getcid();
             while (!$this->stopped) {
                 $data = $this->channel->pop(1);
                 list($action, $sessionId, $field, $data) = $data;
