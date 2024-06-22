@@ -221,7 +221,7 @@ $socket->on('private message', (\Cydrickn\SocketIO\Socket $socket, $anotherSocke
 You can add an middleware for the server
 
 ```php
-$server->on(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
+$server->use(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
     // ...
     $next();
 });
@@ -229,7 +229,7 @@ $server->on(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
 
 To not continue the connection you just pass \Error in the $next
 ```php
-$server->on(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
+$server->use(function (\Cydrickn\SocketIO\Socket $socket, callable $next) {
     // ...
     $next(new \Error('Something went wrong'));
 });
@@ -240,7 +240,7 @@ Just passed true to the second argument.
 
 Also in callback it will pass the response for you to modify if you need it
 ```php
-$server->on(function (\Cydrickn\SocketIO\Socket $socket, \Swoole\Http\Response $response, callable $next) {
+$server->use(function (\Cydrickn\SocketIO\Socket $socket, \Swoole\Http\Response $response, callable $next) {
     // ...
 }, true);
 ```
